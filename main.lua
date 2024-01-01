@@ -110,7 +110,7 @@ function love.update(dt)
 		finalNewVelocity = setVectorLength(attemptedNewVelocity, math.max(maxSpeed, #dotVelocity) * speedRegulationMultiplier)
 		finalDelta = finalNewVelocity - dotVelocity
 		-- #finalDelta may be larger than #attemptedDelta
-		assert(#finalNewVelocity <= #attemptedNewVelocity, "Attempting to reduce speed below speed dot shouldn't go above resulted in an increase in speed")
+		assert(#finalNewVelocity <= #attemptedNewVelocity, "Attempting to reduce speed below a speed the dot shouldn't go above resulted in an increase in its speed")
 	else
 		finalDelta = attemptedDelta
 		finalNewVelocity = attemptedNewVelocity
