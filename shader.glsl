@@ -3,6 +3,7 @@ const float tau = 6.28318530718;
 uniform float maxSpeed;
 uniform float accelCurveShaper;
 uniform vec2 acceleration;
+uniform bool useOriginalAccelerationMultiplierMode;
 
 vec2 rotate(vec2 v, float a) {
 	float s = sin(a);
@@ -17,25 +18,29 @@ vec2 multiplyInDirection(vec2 v, float a, float m) {
 	return rotate(v, a);
 }
 
-float getAccelerationMultiplierCore(float speed, float acceleration, float maxSpeed, float accelCurveShaper) {
+float getAccelerationMultiplierOriginalCore(float speed, float acceleration, float maxSpeed, float accelCurveShaper) {
 	if (acceleration <= 0.0) {
 		return 1.0;
 	}
 	return pow((maxSpeed - speed) / maxSpeed, 1.0 / accelCurveShaper);
 }
 
-float getAccelerationMultiplier(float velocity, float acceleration, float maxSpeed, float accelCurveShaper) {
+float getAccelerationMultiplierOriginal(float velocity, float acceleration, float maxSpeed, float accelCurveShaper) {
 	if (acceleration == 0.0) {
 		return 0.0;
 	} else if (velocity > -maxSpeed && velocity <= 0.0) {
-		return getAccelerationMultiplierCore(-velocity, -acceleration, maxSpeed, accelCurveShaper);
+		return getAccelerationMultiplierOriginalCore(-velocity, -acceleration, maxSpeed, accelCurveShaper);
 	} else if (velocity >= 0.0 && velocity < maxSpeed) {
-		return getAccelerationMultiplierCore(velocity, acceleration, maxSpeed, accelCurveShaper);
+		return getAccelerationMultiplierOriginalCore(velocity, acceleration, maxSpeed, accelCurveShaper);
 	} else if (sign(velocity) * sign(acceleration) == 1.0) {
 		return 0.0;
 	} else {
 		return 1.0;
 	}
+}
+
+float getAccelerationMultiplierDot(vec2 velocity, vec2 acceleration, float maxSpeed, float accelCurveShaper) {
+	return 1.0 - pow(max(0.0, dot(velocity, normalize(acceleration))) / maxSpeed, 1.0 / accelCurveShaper);
 }
 
 vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 screenCoords) {
@@ -45,7 +50,12 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 screenCoords)
 	float velocityAngle = atan(velocity.y, velocity.x);
 	vec2 accelInVelocityRotationSpace = rotate(acceleration, -velocityAngle);
 
-	float multiplierInVelocityDirection = getAccelerationMultiplier(length(velocity), accelInVelocityRotationSpace.x, maxSpeed, accelCurveShaper);
+	float multiplierInVelocityDirection;
+	if (useOriginalAccelerationMultiplierMode) {
+		multiplierInVelocityDirection = getAccelerationMultiplierOriginal(length(velocity), accelInVelocityRotationSpace.x, maxSpeed, accelCurveShaper);
+	} else {
+		multiplierInVelocityDirection = getAccelerationMultiplierDot(velocity, acceleration, maxSpeed, accelCurveShaper);
+	}
 
 	vec2 newAccel = multiplyInDirection(acceleration, velocityAngle, multiplierInVelocityDirection);
 

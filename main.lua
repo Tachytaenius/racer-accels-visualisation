@@ -14,6 +14,8 @@ local dotVelocity = vec2(0, 0)
 local speedRegulationHarshness = 10e-10
 local speedRegulationMultiplier = 1 - speedRegulationHarshness
 
+local accelerationMultiplierMode = "original"
+
 local function normaliseOrZero(v)
 	local l = #v
 	if l == 0 then
@@ -35,7 +37,7 @@ local function sign(x)
 	return 0
 end
 
-local function getAccelerationMultiplier(velocity, accelerationDirection, maxSpeed, accelCurveShaper)
+local function getAccelerationMultiplierOriginal(velocity, accelerationDirection, maxSpeed, accelCurveShaper)
 	if accelerationDirection == 0 then
 		return 0
 	end
@@ -58,6 +60,20 @@ local function getAccelerationMultiplier(velocity, accelerationDirection, maxSpe
 	end
 end
 
+local function getAccelerationMultiplierDot(velocity, acceleration, maxSpeed, accelCurveShaper)
+	return 1 - (
+		(
+			math.max(
+				0,
+				vec2.dot( -- Since velocity is not normalised this is affected by speed as well as the two vectors' alignment
+					velocity,
+					vec2.normalise(acceleration)
+				)
+			)
+		) / maxSpeed
+	) ^ (1 / accelCurveShaper)
+end
+
 local function multiplyVectorInDirection(v, a, m)
 	local vRotated = vec2.rotate(v, -a)
 	vRotated.x = vRotated.x * m
@@ -66,6 +82,12 @@ end
 
 local function shortestAngleDifference(a, b)
 	return (a - b + tau / 2) % tau - tau / 2
+end
+
+function love.keypressed(key)
+	if key == "m" then
+		accelerationMultiplierMode = accelerationMultiplierMode == "original" and "dot" or "original"
+	end
 end
 
 function love.update(dt)
@@ -96,8 +118,13 @@ function love.update(dt)
 	local accelerationVector
 	if #dotVelocity > 0 then
 		local velocityAngle = vec2.toAngle(dotVelocity)
-		local accelRotated = vec2.rotate(acceleration, -velocityAngle)
-		local multiplier = getAccelerationMultiplier(#dotVelocity, accelRotated.x, maxSpeed, accelCurveShaper)
+		local multiplier
+		if accelerationMultiplierMode == "original" then
+			local accelRotated = vec2.rotate(acceleration, -velocityAngle)
+			multiplier = getAccelerationMultiplierOriginal(#dotVelocity, accelRotated.x, maxSpeed, accelCurveShaper)
+		elseif accelerationMultiplierMode == "dot" then
+			multiplier = getAccelerationMultiplierDot(dotVelocity, acceleration, maxSpeed, accelCurveShaper)
+		end
 		accelerationVector = multiplyVectorInDirection(acceleration, velocityAngle, multiplier)
 	else
 		accelerationVector = acceleration
@@ -120,13 +147,16 @@ function love.update(dt)
 end
 
 function love.draw()
+	love.graphics.setColor(1, 1, 1)
 	love.graphics.setShader(shader)
 	shader:send("maxSpeed", maxSpeed)
 	shader:send("accelCurveShaper", accelCurveShaper)
 	shader:send("acceleration", {vec2.components(acceleration)})
+	shader:send("useOriginalAccelerationMultiplierMode", accelerationMultiplierMode == "original")
 	love.graphics.draw(dummy, 0, 0, 0, love.graphics.getDimensions())
 	love.graphics.setShader()
 	love.graphics.setLineWidth(3)
+	love.graphics.setColor(0.75, 0.75, 0.75)
 	love.graphics.circle("line", love.graphics.getWidth() / 2, love.graphics.getHeight() / 2, maxSpeed)
 	-- love.graphics.circle("line", love.graphics.getWidth() / 2, love.graphics.getHeight() / 2, maxAccel)
 	love.graphics.line(
@@ -137,6 +167,7 @@ function love.draw()
 	love.graphics.points(vec2.components(vec2(love.graphics.getDimensions()) / 2 + dotVelocity))
 	love.graphics.print(
 		"Point speed: " .. #dotVelocity .. "\n" ..
-		"Angle diff of accel and point vel: " .. shortestAngleDifference(vec2.toAngle(dotVelocity), vec2.toAngle(acceleration))
+		"Angle diff of accel and point vel: " .. shortestAngleDifference(vec2.toAngle(dotVelocity), vec2.toAngle(acceleration)) .. "\n" ..
+		"Acceleration multiplier mode: " .. accelerationMultiplierMode
 	)
 end
